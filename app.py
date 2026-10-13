@@ -20,7 +20,7 @@ if uploaded_file is not None:
         # Đọc danh sách sheet để tự động nhận diện sheet phù hợp
         xl = pd.ExcelFile(uploaded_file)
         sheet_names = xl.sheet_names
-        selected_sheet = sheet_names[0]
+        selected_sheet = sheet_names[0] # Mặc định lấy sheet đầu tiên
         
         priority_keywords = ['plan', 'survey', 'trajectory', 'quỹ đạo', 'data', 'bhareport', 'wgr', 'planned wgr']
         for kw in priority_keywords:
@@ -52,12 +52,13 @@ if uploaded_file is not None:
         azi_col = [c for c in df.columns if 'azi' in c or 'azim' in c or 'azimuth' in c]
         azi_col = [c for c in azi_col if 'comment' not in c and 'rate' not in c]
         
+        # SỬA LỖI TẠI ĐÂY: Ép chọn phần tử index [0] để tạo chuỗi 1 chiều (Series) chuẩn xác y như file BAT
         if md_col and inc_col and azi_col:
             df_clean['md'] = pd.to_numeric(df[md_col[0]], errors='coerce')
             df_clean['inc'] = pd.to_numeric(df[inc_col[0]], errors='coerce')
             df_clean['azi'] = pd.to_numeric(df[azi_col[0]], errors='coerce')
         else:
-            st.error("Không tự động nhận diện được các cột thông số MD, INC, AZI trong file của bạn.")
+            st.error(f"Không tự động nhận diện được các cột thông số! Quét được: MD={md_col}, INC={inc_col}, AZI={azi_col}")
             st.stop()
             
         df_clean = df_clean.dropna()
@@ -68,9 +69,9 @@ if uploaded_file is not None:
         geo_data = well.df()
         geo_data['vs_calculated'] = np.sqrt(geo_data['east']**2 + geo_data['north']**2)
         
-        # Khởi tạo đồ thị con tích hợp 3 màn hình chung 1 giao diện
+        # Khởi tạo đồ thị con tích hợp 3 màn hình chung 1 giao diện (Đã sửa bớt dấu ngoặc vuông)
         fig = make_subplots(
-            rows=2, cols=2, column_widths=[0.55, 0.45], row_heights=[0.5, 0.5],
+            rows=2, cols=2, column_widths=[0.50, 0.50], row_heights=[0.5, 0.5],
             specs=[[{"type": "scene", "rowspan": 2}, {"type": "xy"}], [None, {"type": "xy"}]],
             subplot_titles=("3D Wellbore Profile (Colored by DLS)", "Horizontal View (Plan View)", "Vertical View (Profile)")
         )
@@ -86,7 +87,7 @@ if uploaded_file is not None:
         fig.update_yaxes(title_text="Northing / North (m)", scaleanchor="x", scaleratio=1, row=1, col=2)
         fig.update_xaxes(title_text="Vertical Section / Displacement (m)", row=2, col=2)
         fig.update_yaxes(title_text="True Vertical Depth - TVD (m)", autorange='reversed', row=2, col=2)
-        fig.update_layout(height=800, showlegend=False, scene=dict(xaxis_title="East (m)", yaxis_title="North (m)", zaxis_title="TVD (m)", zaxis=dict(autorange='reversed'), aspectmode='data', camera=dict(eye=dict(x=1.8, y=1.8, z=0.5))))
+        fig.update_layout(height=850, showlegend=False, scene=dict(xaxis_title="East (m)", yaxis_title="North (m)", zaxis_title="TVD (m)", zaxis=dict(autorange='reversed'), aspectmode='data', camera=dict(eye=dict(x=1.8, y=1.8, z=0.5))))
         
         # 2. HIỂN THỊ ĐỒ THỊ TRỰC TIẾP TRÊN TRÌNH DUYỆT KHÁCH HÀNG
         st.plotly_chart(fig, use_container_width=True)
@@ -99,7 +100,7 @@ if uploaded_file is not None:
         st.download_button(
             label="💾 Tải file đồ thị HTML tương tác 3D về máy của bạn",
             data=html_bytes,
-            file_name=f"{uploaded_file.name.split('.')[0]}_multi_view.html",
+            file_name=f"Trajectory_multi_view.html",
             mime="text/html"
         )
         st.success("🎉 Đã xử lý và hiển thị đồ thị quỹ đạo thành công!")
