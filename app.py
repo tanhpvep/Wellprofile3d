@@ -20,7 +20,7 @@ if uploaded_file is not None:
         # Đọc danh sách sheet để tự động nhận diện sheet phù hợp
         xl = pd.ExcelFile(uploaded_file)
         sheet_names = xl.sheet_names
-        selected_sheet = sheet_names[0] # Mặc định lấy sheet đầu tiên
+        selected_sheet = sheet_names[0] # Mặc định lấy sheet đầu tiên nếu không khớp từ khóa
         
         priority_keywords = ['plan', 'survey', 'trajectory', 'quỹ đạo', 'data', 'bhareport', 'wgr', 'planned wgr']
         for kw in priority_keywords:
@@ -31,16 +31,22 @@ if uploaded_file is not None:
         
         # Đọc thô để dò tìm dòng tiêu đề siêu nới lỏng
         raw_df = pd.read_excel(uploaded_file, sheet_name=selected_sheet, header=None)
-        header_row = 0
+        header_row = None
+        
         for idx, row in raw_df.iterrows():
             row_text = " ".join([str(x).strip().lower() for x in row.values if pd.notna(x)])
+            
             has_md = ('md' in row_text) or ('measured' in row_text) or ('depth' in row_text)
             has_inc = ('inc' in row_text) or ('incl' in row_text) or ('angle' in row_text)
             has_azi = ('azi' in row_text) or ('azim' in row_text) or ('azimuth' in row_text)
+            
             if has_md and has_inc and has_azi and len(row_text) > 15:
                 header_row = idx
                 break
-                
+
+        if header_row is None:
+            header_row = 0
+            
         # Trích xuất và dọn dẹp tên cột
         df = pd.read_excel(uploaded_file, sheet_name=selected_sheet, header=header_row)
         df.columns = df.columns.str.replace(r'\s+', ' ', regex=True).str.strip().str.lower()
@@ -52,24 +58,24 @@ if uploaded_file is not None:
         azi_col = [c for c in df.columns if 'azi' in c or 'azim' in c or 'azimuth' in c]
         azi_col = [c for c in azi_col if 'comment' not in c and 'rate' not in c]
         
-        # SỬA LỖI TẠI ĐÂY: Ép chọn phần tử index [0] để tạo chuỗi 1 chiều (Series) chuẩn xác y như file BAT
+        # ĐỒNG BỘ LOGIC FILE BAT: Ép chọn phần tử index [0] để tạo Series 1 chiều chuẩn xác
         if md_col and inc_col and azi_col:
             df_clean['md'] = pd.to_numeric(df[md_col[0]], errors='coerce')
             df_clean['inc'] = pd.to_numeric(df[inc_col[0]], errors='coerce')
             df_clean['azi'] = pd.to_numeric(df[azi_col[0]], errors='coerce')
         else:
-            st.error(f"Không tự động nhận diện được các cột thông số! Quét được: MD={md_col}, INC={inc_col}, AZI={azi_col}")
+            st.error(f"Không tự động tìm thấy các cột hình học! Quét được: MD={md_col}, INC={inc_col}, AZI={azi_col}")
             st.stop()
             
         df_clean = df_clean.dropna()
         data_dict = df_clean.to_dict(orient='records')
         
-        # Tính toán hình học giếng khoan
+        # 4. TÍNH TOÁN WELL PROFILE BẰNG PYTHAGORAS
         well = wp.load(data_dict, inner_pts=5, set_info={'dlsResolution': 30, 'wellType': 'offshore', 'units': 'metric'}, set_start={'north': 0, 'east': 0, 'depth': 0})
         geo_data = well.df()
         geo_data['vs_calculated'] = np.sqrt(geo_data['east']**2 + geo_data['north']**2)
         
-        # Khởi tạo đồ thị con tích hợp 3 màn hình chung 1 giao diện (Đã sửa bớt dấu ngoặc vuông)
+        # Khởi tạo đồ thị con tích hợp 3 màn hình chung 1 giao diện (Ma trận 2 chiều chuẩn 2x2)
         fig = make_subplots(
             rows=2, cols=2, column_widths=[0.50, 0.50], row_heights=[0.5, 0.5],
             specs=[[{"type": "scene", "rowspan": 2}, {"type": "xy"}], [None, {"type": "xy"}]],
@@ -89,10 +95,10 @@ if uploaded_file is not None:
         fig.update_yaxes(title_text="True Vertical Depth - TVD (m)", autorange='reversed', row=2, col=2)
         fig.update_layout(height=850, showlegend=False, scene=dict(xaxis_title="East (m)", yaxis_title="North (m)", zaxis_title="TVD (m)", zaxis=dict(autorange='reversed'), aspectmode='data', camera=dict(eye=dict(x=1.8, y=1.8, z=0.5))))
         
-        # 2. HIỂN THỊ ĐỒ THỊ TRỰC TIẾP TRÊN TRÌNH DUYỆT KHÁCH HÀNG
+        # 2. HIỂN THỊ ĐỒ THỊ TRỰC TIẾP TRÊN TRÌNH DUYỆT WEB KHÁCH HÀNG
         st.plotly_chart(fig, use_container_width=True)
         
-        # 3. NÚT BẤM CHO PHÉP KHÁCH HÀNG TỰ TẢI FILE HTML VỀ MÁY CỦA HỌ
+        # 3. TẠO BỘ NHỚ ĐỆM ĐỂ KHÁCH TỰ BẤM TẢI FILE HTML VỀ MÁY CỦA HỌ
         buffer = io.StringIO()
         fig.write_html(buffer, include_plotlyjs='cdn')
         html_bytes = buffer.getvalue().encode()
