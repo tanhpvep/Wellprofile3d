@@ -206,5 +206,3 @@ if uploaded_file is not None:
             mime="text/html"
         )
         
-except Exception as e:
-st.error(f"Lỗi xử lý hệ thống cấu trúc file: {e}")
