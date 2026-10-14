@@ -81,7 +81,7 @@ if uploaded_file is not None:
             plan_dict = clean_well_sheet(uploaded_file, plan_sheet)
             if plan_dict:
                 well_plan = wp.load(plan_dict, inner_pts=5, set_info={'wellType': 'offshore', 'units': 'metric'})
-                wells_to_plot.append((well_plan, "Well Plan", "dash", "rgb(31, 119, 180)")) # Màu xanh lam, nét đứt
+                wells_to_plot.append((well_plan, "Well Plan", "dash", "blue")) # Gắn nhãn màu blue
                 df_plan = well_plan.df()
                 df_plan['vs_calculated'] = np.sqrt(df_plan['east']**2 + df_plan['north']**2)
                 geo_data_dict["Well Plan"] = df_plan
@@ -92,7 +92,7 @@ if uploaded_file is not None:
             survey_dict = clean_well_sheet(uploaded_file, survey_sheet)
             if survey_dict:
                 well_survey = wp.load(survey_dict, inner_pts=5, set_info={'wellType': 'offshore', 'units': 'metric'})
-                wells_to_plot.append((well_survey, "Well Survey", "solid", "rgb(214, 39, 40)")) # Màu đỏ, nét liền
+                wells_to_plot.append((well_survey, "Well Survey", "solid", "red")) # Gắn nhãn màu red
                 df_survey = well_survey.df()
                 df_survey['vs_calculated'] = np.sqrt(df_survey['east']**2 + df_survey['north']**2)
                 geo_data_dict["Well Survey"] = df_survey
@@ -110,11 +110,13 @@ if uploaded_file is not None:
         )
 
         # A. DỰNG MÔ HÌNH 3D CHẬP NHAU (Bên trái)
-        # Sử dụng cơ chế nạp danh sách của thư viện để tự động gộp đường
-        for well_obj, name, line_style, color in wells_to_plot:
-            fig_base = well_obj.plot(style={'color': color, 'size': 2})
+        for well_obj, name, line_style, color_name in wells_to_plot:
+            # FIX TẠI ĐÂY: Truyền tham số màu theo thuộc tính mặc định 'dls' hợp lệ của thư viện
+            fig_base = well_obj.plot(style={'color': 'dls', 'size': 2})
             for trace in fig_base.data:
                 trace.name = name
+                # Ép đè màu thực tế trực tiếp vào cấu hình đồ họa đường ống 3D Plotly
+                trace.line.color = 'rgb(31, 119, 180)' if color_name == "blue" else 'rgb(214, 39, 40)'
                 if line_style == "dash":
                     trace.line.dash = "dash"
                 fig.add_trace(trace, row=1, col=1)
