@@ -24,6 +24,7 @@ def clean_well_sheet(uploaded_file, sheet_name):
             row_items = [str(x).strip().lower() if pd.notna(x) else "" for x in row.values]
             row_text = " ".join(row_items)
             
+            # NỚI LỎNG HOÀN TOÀN: Chấp nhận từ khóa 'depth' đứng độc lập trong 'survey depth'
             has_md = ('md' in row_text) or ('measured' in row_text) or ('depth' in row_text)
             has_inc = ('inc' in row_text) or ('incl' in row_text) or ('angle' in row_text)
             has_azi = ('azi' in row_text) or ('azim' in row_text) or ('azm' in row_text) or ('azimuth' in row_text)
@@ -38,6 +39,7 @@ def clean_well_sheet(uploaded_file, sheet_name):
         df.columns = df.columns.str.replace(r'\s+', ' ', regex=True).str.strip().str.lower()
         
         df_clean = pd.DataFrame()
+        # Dò tìm tên cột linh hoạt chứa chuỗi con phù hợp
         md_col = [c for c in df.columns if 'md' in c or 'measured' in c or 'depth' in c]
         inc_col = [c for c in df.columns if 'inc' in c or 'incl' in c]
         inc_col = [c for c in inc_col if 'comment' not in c and 'rate' not in c and 'vsec' not in c]
@@ -45,6 +47,7 @@ def clean_well_sheet(uploaded_file, sheet_name):
         azi_col = [c for c in azi_col if 'comment' not in c and 'rate' not in c]
         
         if md_col and inc_col and azi_col:
+            # Ép lấy cột đầu tiên (index 0) thỏa mãn để đưa về mảng 1 chiều Series
             df_clean['md'] = pd.to_numeric(df[md_col[0]], errors='coerce')
             df_clean['inc'] = pd.to_numeric(df[inc_col[0]], errors='coerce')
             df_clean['azi'] = pd.to_numeric(df[azi_col[0]], errors='coerce')
@@ -69,6 +72,7 @@ if uploaded_file is not None:
             elif 'survey' in low_sheet or 'actual' in low_sheet or 'data' in low_sheet or 'sheet1' in low_sheet:
                 survey_sheet = sheet
                 
+        # Thiết lập dự phòng an toàn nếu tên sheet không chứa từ khóa
         if not plan_sheet and len(sheet_names) > 0: plan_sheet = sheet_names[0]
         if not survey_sheet and len(sheet_names) > 1: survey_sheet = sheet_names[1]
         elif not survey_sheet and len(sheet_names) == 1: survey_sheet = sheet_names[0]
@@ -106,7 +110,7 @@ if uploaded_file is not None:
         fig = make_subplots(
             rows=2, cols=2, column_widths=[0.55, 0.45], row_heights=[0.5, 0.5],
             specs=[[{"type": "scene", "rowspan": 2}, {"type": "xy"}], [None, {"type": "xy"}]],
-            subplot_titles=("3D Wellbore Trajectory Profile (Colored by DLS)", "Horizontal View (Plan View - Top Down)", "Vertical View (Cross Section - Profile)")
+            subplot_titles=("3D Wellbore Trajectory (Minimum Curvature)", "Horizontal View (Plan View - Top Down)", "Vertical View (Profile View)")
         )
 
         # A. DỰNG MÔ HÌNH HÌNH HỌC 3D (Bên trái)
@@ -114,66 +118,46 @@ if uploaded_file is not None:
             fig_base = well_obj.plot(style={'color': 'dls', 'size': 1})
             for trace in fig_base.data:
                 trace.showlegend = False 
+                trace.line.color = 'rgb(120, 120, 120)' if color_name == "black" else 'rgb(214, 39, 40)'
+                trace.line.width = 3 if color_name == "black" else 5
+                trace.marker.showscale = False 
                 
                 if color_name == "black":
                     trace.mode = 'lines'
-                    trace.line.color = 'rgb(120, 120, 120)' 
-                    trace.line.width = 3
                     trace.line.dash = "dash"
-                    trace.marker.showscale = False
                 else:
                     trace.mode = 'lines+markers'
-                    trace.line.width = 5
-                    trace.marker.showscale = True
-                    trace.marker.colorscale = 'Jet' 
                     trace.marker.size = 3
-                    trace.marker.colorbar = dict(
-                        title="DLS (deg/30m)",
-                        thickness=15,
-                        x=1.15, 
-                        y=0.5
-                    )
+                    trace.marker.color = 'rgb(214, 39, 40)'
                     
                 fig.add_trace(trace, row=1, col=1)
 
-        # B. DỰNG MẶT BẰNG & MẶT ĐỨNG CÓ ĐỔ MÀU DLS THEO CHẤM TRÒN (Bên phải)
+        # B. DỰNG MẶT BẰNG & MẶT ĐỨNG (Bên phải)
         for name, geo_df in geo_data_dict.items():
             is_plan = "Plan" in name
             line_style = "dash" if is_plan else "solid"
+            line_color = "rgb(120, 120, 120)" if is_plan else "rgb(214, 39, 40)"
             line_width = 3 if is_plan else 5 
+            plot_mode = 'lines' if is_plan else 'lines+markers'
             
-            if is_plan:
-                fig.add_trace(
-                    go.Scatter(
-                        x=geo_df['east'], y=geo_df['north'], mode='lines',
-                        line=dict(color='rgb(120, 120, 120)', width=line_width, dash=line_style), 
-                        name=name, showlegend=True 
-                    ), row=1, col=2
-                )
-                fig.add_trace(
-                    go.Scatter(
-                        x=geo_df['vs_calculated'], y=geo_df['tvd'], mode='lines',
-                        line=dict(color='rgb(120, 120, 120)', width=line_width, dash=line_style), 
-                        name=name, showlegend=False 
-                    ), row=2, col=2
-                )
-            else:
-                fig.add_trace(
-                    go.Scatter(
-                        x=geo_df['east'], y=geo_df['north'], mode='lines+markers',
-                        marker=dict(size=4, color=geo_df['dls'], colorscale='Jet', showscale=False),
-                        line=dict(color='rgb(214, 39, 40)', width=line_width), 
-                        name=name, showlegend=True 
-                    ), row=1, col=2
-                )
-                fig.add_trace(
-                    go.Scatter(
-                        x=geo_df['vs_calculated'], y=geo_df['tvd'], mode='lines+markers',
-                        marker=dict(size=4, color=geo_df['dls'], colorscale='Jet', showscale=False),
-                        line=dict(color='rgb(214, 39, 40)', width=line_width), 
-                        name=name, showlegend=False 
-                    ), row=2, col=2
-                )
+            fig.add_trace(
+                go.Scatter(
+                    x=geo_df['east'], y=geo_df['north'], mode=plot_mode,
+                    marker=dict(size=4, color='rgb(214, 39, 40)', symbol='circle') if not is_plan else None,
+                    line=dict(color=line_color, width=line_width, dash=line_style), 
+                    name=name,
+                    showlegend=True 
+                ), row=1, col=2
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=geo_df['vs_calculated'], y=geo_df['tvd'], mode=plot_mode,
+                    marker=dict(size=4, color='rgb(214, 39, 40)', symbol='circle') if not is_plan else None,
+                    line=dict(color=line_color, width=line_width, dash=line_style), 
+                    name=name,
+                    showlegend=False 
+                ), row=2, col=2
+            )
 
         # 5. CẤU HÌNH HỆ TRỤC TỌA ĐỘ VÀ ĐỒNG BỘ TỶ LỆ THỰC HÌNH HỌC
         fig.update_xaxes(title_text="Easting / East (m)", row=1, col=2)
@@ -206,3 +190,5 @@ if uploaded_file is not None:
             mime="text/html"
         )
         
+    except Exception as e:
+        st.error(f"Lỗi xử lý hệ thống cấu trúc file: {e}")
