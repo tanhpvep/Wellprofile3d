@@ -105,7 +105,7 @@ if uploaded_file is not None:
         # 4. KHỞI TẠO BỐ CỤC ĐỒ THỊ SUBPLOTS 3 MÀN HÌNH CHUNG 1 TAB
         fig = make_subplots(
             rows=2, cols=2, column_widths=[0.55, 0.45], row_heights=[0.5, 0.5],
-            specs=[[[{"type": "scene", "rowspan": 2}, {"type": "xy"}], [None, {"type": "xy"}]]],
+            specs=[[{"type": "scene", "rowspan": 2}, {"type": "xy"}], [None, {"type": "xy"}]],
             subplot_titles=("3D Wellbore Trajectory Profile (Colored by DLS)", "Horizontal View (Plan View - Top Down)", "Vertical View (Cross Section - Profile)")
         )
 
