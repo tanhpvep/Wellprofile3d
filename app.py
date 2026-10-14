@@ -60,7 +60,6 @@ if uploaded_file is not None:
         plan_sheet = None
         survey_sheet = None
         
-        # Tự động phân loại sheet dựa trên tên từ khóa thực tế
         for sheet in sheet_names:
             low_sheet = sheet.lower()
             if 'plan' in low_sheet:
@@ -68,55 +67,51 @@ if uploaded_file is not None:
             elif 'survey' in low_sheet or 'actual' in low_sheet:
                 survey_sheet = sheet
                 
-        # Nếu không tìm thấy bằng từ khóa, lấy mặc định sheet 1 và sheet 2
         if not plan_sheet and len(sheet_names) > 0: plan_sheet = sheet_names[0]
         if not survey_sheet and len(sheet_names) > 1: survey_sheet = sheet_names[1]
 
-        # Khởi tạo danh sách chứa các đối tượng giếng khoan phục vụ subplot
         wells_to_plot = []
         geo_data_dict = {}
         
-        # 2. XỬ LÝ CHÈN DỮ LIỆU SHEET PLAN
         if plan_sheet:
             plan_dict = clean_well_sheet(uploaded_file, plan_sheet)
             if plan_dict:
                 well_plan = wp.load(plan_dict, inner_pts=5, set_info={'wellType': 'offshore', 'units': 'metric'})
-                wells_to_plot.append((well_plan, "Well Plan", "dash", "blue")) # Gắn nhãn màu blue
+                wells_to_plot.append((well_plan, "Well Plan (Thiết kế)", "dash", "black")) 
                 df_plan = well_plan.df()
                 df_plan['vs_calculated'] = np.sqrt(df_plan['east']**2 + df_plan['north']**2)
-                geo_data_dict["Well Plan"] = df_plan
+                geo_data_dict["Well Plan (Thiết kế)"] = df_plan
                 st.sidebar.success(f"✓ Đã nạp thành công dữ liệu Thiết kế từ Sheet: {plan_sheet}")
 
-        # 3. XỬ LÝ CHÈN DỮ LIỆU SHEET SURVEY
         if survey_sheet:
             survey_dict = clean_well_sheet(uploaded_file, survey_sheet)
             if survey_dict:
                 well_survey = wp.load(survey_dict, inner_pts=5, set_info={'wellType': 'offshore', 'units': 'metric'})
-                wells_to_plot.append((well_survey, "Well Survey", "solid", "red")) # Gắn nhãn màu red
+                wells_to_plot.append((well_survey, "Well Survey (Thực tế)", "solid", "red")) 
                 df_survey = well_survey.df()
                 df_survey['vs_calculated'] = np.sqrt(df_survey['east']**2 + df_survey['north']**2)
-                geo_data_dict["Well Survey"] = df_survey
+                geo_data_dict["Well Survey (Thực tế)"] = df_survey
                 st.sidebar.success(f"✓ Đã nạp thành công dữ liệu Thực tế từ Sheet: {survey_sheet}")
 
         if not wells_to_plot:
             st.error("Không thể trích xuất cấu trúc dữ liệu hợp lệ từ các sheet!")
             st.stop()
 
-        # 4. KHỞI TẠO BỐ CỤC ĐỒ THỊ SUBPLOTS 3 MÀN HÌNH CHUNG 1 TAB
         fig = make_subplots(
-            rows=2, cols=2, column_widths=[0.50, 0.50], row_heights=[0.5, 0.5],
+            rows=2, cols=2, column_widths=[0.55, 0.45], row_heights=[0.5, 0.5],
             specs=[[{"type": "scene", "rowspan": 2}, {"type": "xy"}], [None, {"type": "xy"}]],
             subplot_titles=("3D Wellbore Trajectory (Plan vs Survey)", "Horizontal View (Plan View - Top Down)", "Vertical View (Profile View)")
         )
 
         # A. DỰNG MÔ HÌNH 3D CHẬP NHAU (Bên trái)
         for well_obj, name, line_style, color_name in wells_to_plot:
-            # FIX TẠI ĐÂY: Truyền tham số màu theo thuộc tính mặc định 'dls' hợp lệ của thư viện
-            fig_base = well_obj.plot(style={'color': 'dls', 'size': 2})
+            fig_base = well_obj.plot(style={'color': 'dls', 'size': 1})
             for trace in fig_base.data:
                 trace.name = name
-                # Ép đè màu thực tế trực tiếp vào cấu hình đồ họa đường ống 3D Plotly
-                trace.line.color = 'rgb(31, 119, 180)' if color_name == "blue" else 'rgb(214, 39, 40)'
+                # SỬA LỖI ĐÈ MÀU VÀ CHẶN COLORBAR DƯ THỪA TRÊN KHÔNG GIAN 3D
+                trace.line.color = 'rgb(100, 100, 100)' if color_name == "black" else 'rgb(214, 39, 40)'
+                trace.line.width = 3 if color_name == "black" else 5
+                trace.marker.showscale = False # Tắt hiển thị cột thang đo màu bên phải
                 if line_style == "dash":
                     trace.line.dash = "dash"
                 fig.add_trace(trace, row=1, col=1)
@@ -124,17 +119,15 @@ if uploaded_file is not None:
         # B. DỰNG MẶT BẰNG & MẶT ĐỨNG CHẬP NHAU (Bên phải)
         for name, geo_df in geo_data_dict.items():
             line_style = "dash" if "Plan" in name else "solid"
-            line_color = "rgb(31, 119, 180)" if "Plan" in name else "rgb(214, 39, 40)"
-            line_width = 2 if "Plan" in name else 4 # Ép nét thực tế dày hơn để dễ nhìn
+            line_color = "rgb(100, 100, 100)" if "Plan" in name else "rgb(214, 39, 40)"
+            line_width = 3 if "Plan" in name else 5 
             
-            # Vẽ mặt bằng (Horizontal)
             fig.add_trace(
                 go.Scatter(
                     x=geo_df['east'], y=geo_df['north'], mode='lines',
                     line=dict(color=line_color, width=line_width, dash=line_style), name=name
                 ), row=1, col=2
             )
-            # Vẽ mặt đứng (Vertical Section)
             fig.add_trace(
                 go.Scatter(
                     x=geo_df['vs_calculated'], y=geo_df['tvd'], mode='lines',
@@ -150,7 +143,7 @@ if uploaded_file is not None:
         
         fig.update_layout(
             height=850,
-            showlegend=True, # Bật chú thích để phân biệt đường màu Plan và Survey
+            showlegend=True, # Hiện bảng chú thích tên đường sạch sẽ
             scene=dict(
                 xaxis_title="East (m)", yaxis_title="North (m)", zaxis_title="TVD (m)",
                 zaxis=dict(autorange='reversed'), aspectmode='data',
@@ -158,10 +151,9 @@ if uploaded_file is not None:
             )
         )
 
-        # 6. HIỂN THỊ ĐỒ THỊ TRỰC TIẾP TRÊN TRÌNH DUYỆT WEB KHÁCH HÀNG
         st.plotly_chart(fig, use_container_width=True)
         
-        # 7. TẠO BỘ NHỚ ĐỆM ĐỂ KHÁCH TỰ BẤM TẢI FILE HTML VỀ MÁY CỦA HỌ
+        # 6. TẠO BỘ NHỚ ĐỆM ĐỂ TẢI FILE HTML
         buffer = io.StringIO()
         fig.write_html(buffer, include_plotlyjs='cdn')
         html_bytes = buffer.getvalue().encode()
