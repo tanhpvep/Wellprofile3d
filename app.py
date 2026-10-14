@@ -100,38 +100,57 @@ if uploaded_file is not None:
         fig = make_subplots(
             rows=2, cols=2, column_widths=[0.55, 0.45], row_heights=[0.5, 0.5],
             specs=[[{"type": "scene", "rowspan": 2}, {"type": "xy"}], [None, {"type": "xy"}]],
-            subplot_titles=("3D Wellbore Trajectory (Plan vs Survey)", "Horizontal View (Plan View - Top Down)", "Vertical View (Profile View)")
+            subplot_titles=("3D Wellbore Trajectory (Minimum Curvature)", "Horizontal View (Plan View - Top Down)", "Vertical View (Profile View)")
         )
 
-        # A. DỰNG MÔ HÌNH 3D CHẬP NHAU (Bên trái)
+        # A. DỰNG MÔ HÌNH HÌNH HỌC 3D THEO Ý TƯỞNG THIẾT KẾ CỦA BẠN (Bên trái)
         for well_obj, name, line_style, color_name in wells_to_plot:
             fig_base = well_obj.plot(style={'color': 'dls', 'size': 1})
             for trace in fig_base.data:
-                trace.name = name
-                # SỬA LỖI ĐÈ MÀU VÀ CHẶN COLORBAR DƯ THỪA TRÊN KHÔNG GIAN 3D
-                trace.line.color = 'rgb(100, 100, 100)' if color_name == "black" else 'rgb(214, 39, 40)'
+                trace.showlegend = False 
+                trace.line.color = 'rgb(120, 120, 120)' if color_name == "black" else 'rgb(214, 39, 40)'
                 trace.line.width = 3 if color_name == "black" else 5
-                trace.marker.showscale = False # Tắt hiển thị cột thang đo màu bên phải
-                if line_style == "dash":
+                trace.marker.showscale = False 
+                
+                # Ý TƯỞNG CỦA BẠN TẠI ĐÂY: Phân tách chế độ vẽ 3D cho Plan và Survey
+                if color_name == "black":
+                    # Kịch bản Plan: Chỉ vẽ đường cong liền lạc nét đứt (Ẩn toàn bộ dấu chấm tròn)
+                    trace.mode = 'lines'
                     trace.line.dash = "dash"
+                else:
+                    # Kịch bản Survey: Vẽ đường cong nét liền dày VÀ hiện rõ các hạt chấm tròn trạm đo
+                    trace.mode = 'lines+markers'
+                    trace.marker.size = 3
+                    trace.marker.color = 'rgb(214, 39, 40)'
+                    
                 fig.add_trace(trace, row=1, col=1)
 
-        # B. DỰNG MẶT BẰNG & MẶT ĐỨNG CHẬP NHAU (Bên phải)
+        # B. DỰNG MẶT BẰNG & MẶT ĐỨNG THEO Ý TƯỞNG THIẾT KẾ CỦA BẠN (Bên phải)
         for name, geo_df in geo_data_dict.items():
-            line_style = "dash" if "Plan" in name else "solid"
-            line_color = "rgb(100, 100, 100)" if "Plan" in name else "rgb(214, 39, 40)"
-            line_width = 3 if "Plan" in name else 5 
+            is_plan = "Plan" in name
+            line_style = "dash" if is_plan else "solid"
+            line_color = "rgb(120, 120, 120)" if is_plan else "rgb(214, 39, 40)"
+            line_width = 3 if is_plan else 5 
+            plot_mode = 'lines' if is_plan else 'lines+markers' # Ép đồng bộ chế độ hiện điểm giống khối 3D
             
+            # Vẽ mặt bằng (Horizontal View)
             fig.add_trace(
                 go.Scatter(
-                    x=geo_df['east'], y=geo_df['north'], mode='lines',
-                    line=dict(color=line_color, width=line_width, dash=line_style), name=name
+                    x=geo_df['east'], y=geo_df['north'], mode=plot_mode,
+                    marker=dict(size=4, color='rgb(214, 39, 40)', symbol='circle') if not is_plan else None,
+                    line=dict(color=line_color, width=line_width, dash=line_style), 
+                    name=name,
+                    showlegend=True 
                 ), row=1, col=2
             )
+            # Vẽ mặt đứng (Vertical Section)
             fig.add_trace(
                 go.Scatter(
-                    x=geo_df['vs_calculated'], y=geo_df['tvd'], mode='lines',
-                    line=dict(color=line_color, width=line_width, dash=line_style), name=name
+                    x=geo_df['vs_calculated'], y=geo_df['tvd'], mode=plot_mode,
+                    marker=dict(size=4, color='rgb(214, 39, 40)', symbol='circle') if not is_plan else None,
+                    line=dict(color=line_color, width=line_width, dash=line_style), 
+                    name=name,
+                    showlegend=False 
                 ), row=2, col=2
             )
 
@@ -143,7 +162,8 @@ if uploaded_file is not None:
         
         fig.update_layout(
             height=850,
-            showlegend=True, # Hiện bảng chú thích tên đường sạch sẽ
+            showlegend=True, 
+            legend=dict(yanchor="top", y=0.99, xanchor="left", x=1.02), 
             scene=dict(
                 xaxis_title="East (m)", yaxis_title="North (m)", zaxis_title="TVD (m)",
                 zaxis=dict(autorange='reversed'), aspectmode='data',
